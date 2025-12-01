@@ -1,11 +1,16 @@
 import time
 import uuid
+import threading
 from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import get_db, engine, Base
+
+# Import workers
+from ingestion_worker import IngestionWorker
+from scoring_engine import ScoringEngine
 
 # Initialize DB tables
 # For SQLite/Local dev without migrations, we create tables if they don't exist
@@ -43,6 +48,23 @@ except Exception:
         conn.commit()
 
 app = FastAPI(title="Gravity API", version="0.1.0")
+
+# Background Worker Starter
+@app.on_event("startup")
+def start_background_workers():
+    print("Starting background workers...")
+    
+    # Start Ingestion Worker
+    ingestion = IngestionWorker()
+    ingestion_thread = threading.Thread(target=ingestion.run, daemon=True)
+    ingestion_thread.start()
+    print("Ingestion Worker started.")
+
+    # Start Scoring Engine
+    scoring = ScoringEngine()
+    scoring_thread = threading.Thread(target=scoring.run, daemon=True)
+    scoring_thread.start()
+    print("Scoring Engine started.")
 
 # Pydantic Models
 class MonitorBase(BaseModel):
