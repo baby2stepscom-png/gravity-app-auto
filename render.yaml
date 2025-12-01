@@ -1,0 +1,71 @@
+services:
+  # Web Service for the API
+  - type: web
+    name: gravity-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gravity-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: gravity-redis
+          property: connectionString
+      - key: KAFKA_TOPIC
+        value: ingestion.raw
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GOOGLE_CX
+        sync: false
+
+  # Worker for Ingestion
+  - type: worker
+    name: gravity-ingestion-worker
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python ingestion_worker.py
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: gravity-redis
+          property: connectionString
+      - key: KAFKA_TOPIC
+        value: ingestion.raw
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GOOGLE_CX
+        sync: false
+
+  # Worker for Scoring Engine
+  - type: worker
+    name: gravity-scoring-engine
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python scoring_engine.py
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gravity-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: gravity-redis
+          property: connectionString
+      - key: KAFKA_TOPIC
+        value: ingestion.raw
+
+  # Redis Service
+  - type: redis
+    name: gravity-redis
+    ipAllowList: [] # Allow internal connections only
+
+databases:
+  - name: gravity-db
+    databaseName: gravity
+    user: gravity_user
